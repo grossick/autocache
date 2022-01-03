@@ -7,7 +7,6 @@
 
 #define MAX_FILES_CACHED 10
 
-FILE *logfile = NULL;
 struct CachedFile cached_file_db[MAX_FILES_CACHED];
 
 int write_FILE_to_CachedFile(FILE *file, struct CachedFile *cached_file) {
@@ -25,7 +24,6 @@ int write_FILE_to_CachedFile(FILE *file, struct CachedFile *cached_file) {
 int write_data_to_CachedFile(void *data, size_t size, struct CachedFile *cached_file){
     memset(cached_file->data, 0, sizeof(cached_file->data));
     if (size > sizeof(cached_file->data)) {
-        fprintf( logfile,"FILE SIZE IS LARGER THAN CACHE ALLOWS ******************************************************************************************************");
         return -1;
     }
     memcpy(cached_file->data, data, size);
@@ -39,7 +37,6 @@ int prepare_memory_cached_file(struct CachedFile *cached_file, const char *filen
     if (mode[0] == 'r' && fresh){
         FILE *file = fopen(filename, "r");
         if (file == NULL){
-            fprintf( logfile,"Unable to open file: %s\n", filename);
             return -1;
         }
         write_FILE_to_CachedFile(file, cached_file);
@@ -57,7 +54,6 @@ int search_cached_file(const char *filename, struct CachedFile **cached_file){
     for (i=0; i< MAX_FILES_CACHED; i++){
         if (strncmp(filename, cached_file_db[i].filename, MAX_FILE_NAME_LEN) == 0){
             *cached_file = &cached_file_db[i];
-            fprintf( logfile,"Found cached file for %s\n", filename);
             return 0;
         }
     }
@@ -80,7 +76,6 @@ struct CachedFile *get_cached_file(const char *filename, const char *mode) {
     int prepared = -1;
     if (search_cached_file(filename, &cached_file) < 0){
         if (get_unused_cache(&cached_file) < 0){
-            fprintf( logfile,"Failed to cache file\n");
             return NULL;
         }
         prepared = prepare_memory_cached_file(cached_file, filename, mode, 1);
@@ -90,7 +85,6 @@ struct CachedFile *get_cached_file(const char *filename, const char *mode) {
     }
 
     if (prepared < 0) {
-        fprintf( logfile,"Failed to prepare cached file");
         return NULL;
     }
 
@@ -98,9 +92,7 @@ struct CachedFile *get_cached_file(const char *filename, const char *mode) {
 }
 
 int update_cached_file(const char *filename, void *data, size_t size){
-    logfile = fopen("cache.log", "a");
     if (size > MAX_FILE_SIZE){
-        fprintf( logfile,"FILE SIZE IS LARGER THAN CACHE ALLOWS ******************************************************************************************************");
         return -1;
     }
 
@@ -108,8 +100,6 @@ int update_cached_file(const char *filename, void *data, size_t size){
     struct CachedFile *cached_file = get_cached_file(filename, "w");
 
     write_data_to_CachedFile(data, size, cached_file);
-    fprintf(logfile, "Wrote %zu bytes to %s\n", size, filename);
-    fclose(logfile);
 }
 
 size_t update_len_cached_file(struct CachedFile *cached_file) {
@@ -125,20 +115,15 @@ size_t update_len_cached_file(struct CachedFile *cached_file) {
 }
 
 FILE *fopen_cached(const char *filename, const char *mode) {
-    logfile = fopen("cache.log", "a");
     if (mode[0] == 'a'){
-        fclose(logfile);
         // Append is not currently supported
         return fopen(filename, mode);
     }
     struct CachedFile *cached_file = NULL;
     if ((cached_file = get_cached_file(filename, mode)) == NULL) {
-        fprintf( logfile,"failed to cache file\n");
-        fclose(logfile);
         return fopen(filename, mode);
     }
 
-    fprintf(logfile, "File opened from cache: %s Size: %zu\n", cached_file->filename, cached_file->size);
 
     // 'w' does not truncate the file in fmemopen like it does on fopen
     const char *fmemopen_mode = (mode[0] == 'w') ? "w" : mode;
@@ -150,9 +135,6 @@ void init_cache(){
     //cached_file_db = mmap(NULL, sizeof(struct CachedFile)*MAX_FILES_CACHED,
 	//	    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    logfile = fopen("cache.log", "w");
-    fprintf(logfile, "Init\n");
-    fclose(logfile);
     memset(cached_file_db, 0, sizeof(cached_file_db));
 }
 
